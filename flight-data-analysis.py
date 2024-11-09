@@ -30,24 +30,32 @@ def task1_largest_discrepancy(flights_df, carriers_df):
     )
 
     # Calculate the discrepancy (absolute difference)
-    flights_df = flights_df.withColumn("Discrepancy", F.abs(flights_df["ScheduledTravelTime"] - flights_df["ActualTravelTime"]))
+    flights_df = flights_df.withColumn(
+        "Discrepancy", F.abs(F.col("ScheduledTravelTime") - F.col("ActualTravelTime"))
+    )
 
-    # Rank by largest discrepancy using window functions
+    # Define a window partitioned by CarrierCode and ordered by Discrepancy descending
     window_spec = Window.partitionBy("CarrierCode").orderBy(F.desc("Discrepancy"))
-    
+
+    # Add a rank column to select the flight with the largest discrepancy per carrier
     flights_df = flights_df.withColumn("Rank", F.row_number().over(window_spec))
 
-    # Join with carriers for carrier names
+    # Filter only the top-ranked flight per carrier
+    flights_df = flights_df.filter(F.col("Rank") == 1)
+
+    # Join with carriers to get the carrier name
     flights_df = flights_df.join(carriers_df, on="CarrierCode", how="inner")
 
-    # Select required columns and filter top results (you can adjust the rank if needed)
+    # Select and order the final output columns
     result = flights_df.select(
         "FlightNum", "CarrierName", "Origin", "Destination",
-        "ScheduledTravelTime", "ActualTravelTime", "Discrepancy"
-    ).filter(flights_df["Rank"] <= 10)  # Adjust this to get top N flights
+        "ScheduledTravelTime", "ActualTravelTime", "Discrepancy", "CarrierCode"
+    ).orderBy(F.desc("Discrepancy"))
 
+    # Write the output to a CSV file
     result.write.csv(task1_output, header=True)
     print(f"Task 1 output written to {task1_output}")
+
 
 
 # ------------------------
